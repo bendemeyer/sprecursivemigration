@@ -1,0 +1,5 @@
+C:\SharePoint Solutions\Console Apps\ListFieldUpdate - Recursive\ListFieldUpdate\obj\x86\Release\ResolveAssemblyReference.cache
+C:\SharePoint Solutions\Console Apps\ListFieldUpdate - Recursive\ListFieldUpdate\bin\Release\ListFieldUpdateRecursive.exe
+C:\SharePoint Solutions\Console Apps\ListFieldUpdate - Recursive\ListFieldUpdate\bin\Release\ListFieldUpdateRecursive.pdb
+C:\SharePoint Solutions\Console Apps\ListFieldUpdate - Recursive\ListFieldUpdate\obj\x86\Release\ListFieldUpdateRecursive.exe
+C:\SharePoint Solutions\Console Apps\ListFieldUpdate - Recursive\ListFieldUpdate\obj\x86\Release\ListFieldUpdateRecursive.pdb

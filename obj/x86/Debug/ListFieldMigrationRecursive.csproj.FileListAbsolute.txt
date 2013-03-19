@@ -4,3 +4,9 @@ C:\SharePoint Solutions\BeenJammin\Console Apps\ListFieldMigrationRecursive\bin\
 C:\SharePoint Solutions\BeenJammin\Console Apps\ListFieldMigrationRecursive\obj\x86\Debug\ResolveAssemblyReference.cache
 C:\SharePoint Solutions\BeenJammin\Console Apps\ListFieldMigrationRecursive\obj\x86\Debug\ListFieldMigrationRecursive.exe
 C:\SharePoint Solutions\BeenJammin\Console Apps\ListFieldMigrationRecursive\obj\x86\Debug\ListFieldMigrationRecursive.pdb
+C:\SharePoint Solutions\git\ListFieldMigrationRecursive\obj\x86\Debug\ListFieldMigrationRecursive.exe
+C:\SharePoint Solutions\git\ListFieldMigrationRecursive\obj\x86\Debug\ListFieldMigrationRecursive.pdb
+C:\SharePoint Solutions\git\ListFieldMigrationRecursive\bin\Debug\ListFieldMigrationRecursive.exe
+C:\SharePoint Solutions\git\ListFieldMigrationRecursive\bin\Debug\ListFieldMigrationRecursive.pdb
+C:\SharePoint Solutions\git\ListFieldMigrationRecursive\bin\Debug\Microsoft.Sharepoint.Sandbox.dll
+C:\SharePoint Solutions\git\ListFieldMigrationRecursive\obj\x86\Debug\ResolveAssemblyReference.cache

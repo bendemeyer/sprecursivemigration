@@ -52,166 +52,184 @@ namespace ListFieldMigrationRecursive
         //then calls itself for all that SPWeb's child SPWeb objects
         public static void MigrateDataRecursive(SPWeb oWeb, string listname, List<KeyValuePair<string, string>> copyFields, bool delete)
         {
-            SPList oList = oWeb.Lists[listname];
-            //save state of list properties that need to be changed so they can be restored later
-            bool isForcedCheckout = oList.ForceCheckout;
-            bool isEnabledModeration = oList.EnableModeration;
-            oList.ForceCheckout = false;
-            oList.EnableModeration = false;
-            oList.Update();
-            //create list of files with minor versions that need to be treated specially
-            List<SPFile_Info> minorFileInfo = new List<SPFile_Info>();
+            bool listExists = true;
+            SPList oList = null;
+            //try to get the list. if it fails, set the boolean to false
             try
             {
-                foreach (SPFile oFile in oList.RootFolder.Files)
+                oList = oWeb.Lists[listname];
+            }
+            catch
+            {
+                listExists = false;
+            }
+            if (listExists)
+            {
+                //save state of list properties that need to be changed so they can be restored later
+                bool isForcedCheckout = oList.ForceCheckout;
+                bool isEnabledModeration = oList.EnableModeration;
+                oList.ForceCheckout = false;
+                oList.EnableModeration = false;
+                oList.Update();
+                //create list of files with minor versions that need to be treated specially
+                List<SPFile_Info> minorFileInfo = new List<SPFile_Info>();
+                try
                 {
-                    try
+                    foreach (SPFile oFile in oList.RootFolder.Files)
                     {
-                        //if file is checked out, force a check in
-                        if (oFile.CheckOutType != SPFile.SPCheckOutType.None)
+                        try
                         {
+                            //if file is checked out, force a check in
+                            if (oFile.CheckOutType != SPFile.SPCheckOutType.None)
+                            {
+                                oFile.CheckIn("");
+                            }
+                            //if file is a minor version or has no major version, add its relevent data to our list of minor version files
+                            if (oFile.MinorVersion != 0 && oFile.MajorVersion != 0)
+                            {
+                                SPFile_Info currentFile = new SPFile_Info();
+                                currentFile.majorVersion = oFile.MajorVersion;
+                                currentFile.minorVersion = oFile.MinorVersion;
+                                currentFile.Id = oFile.UniqueId;
+                                currentFile.modifiedBy = oFile.Item["Modified By"];
+                                currentFile.modifiedDate = oFile.Item["Modified"];
+                                minorFileInfo.Add(currentFile);
+                            }
+                            //if the file is a major version or has no major version, migrate the column data and use SystemUpdate(false) to prevent any changes to versioning or modified data
+                            else
+                            {
+                                foreach (KeyValuePair<string, string> oPair in copyFields)
+                                {
+                                    if (oFile.Item.Fields.ContainsField(oPair.Key))
+                                    {
+                                        if (oFile.Item[oPair.Key] != null)
+                                        {
+                                            oFile.Item[oPair.Value] = oFile.Item[oPair.Key].ToString();
+                                        }
+                                    }
+                                }
+                                oFile.Item.SystemUpdate(false);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
+                        }
+                    }
+
+                    //restore the most recent major version of all files in our minor version list, and publish it to create a new major version
+                    foreach (SPFile_Info oFile_Info in minorFileInfo)
+                    {
+                        try
+                        {
+                            SPFile oFile = oWeb.GetFile(oFile_Info.Id);
+                            oFile.CheckOut();
+                            oFile.Versions.RestoreByLabel(oFile_Info.majorVersion + ".0");
                             oFile.CheckIn("");
+                            oFile.Publish("");
+                            oFile.Update();
                         }
-                        //if file is a minor version or has no major version, add its relevent data to our list of minor version files
-                        if (oFile.MinorVersion != 0 && oFile.MajorVersion != 0)
+                        catch (Exception e)
                         {
-                            SPFile_Info currentFile = new SPFile_Info();
-                            currentFile.majorVersion = oFile.MajorVersion;
-                            currentFile.minorVersion = oFile.MinorVersion;
-                            currentFile.Id = oFile.UniqueId;
-                            currentFile.modifiedBy = oFile.Item["Modified By"];
-                            currentFile.modifiedDate = oFile.Item["Modified"];
-                            minorFileInfo.Add(currentFile);
+                            Console.WriteLine(e);
                         }
-                        //if the file is a major version or has no major version, migrate the column data and use SystemUpdate(false) to prevent any changes to versioning or modified data
-                        else
+                    }
+
+                    //migrate the column data on the newly restored major version and use SystemUpdate(false) to prevent any changes to versioning or modified data
+                    foreach (SPFile_Info oFile_Info in minorFileInfo)
+                    {
+                        try
                         {
+                            SPListItem oItem = oWeb.GetFile(oFile_Info.Id).Item;
                             foreach (KeyValuePair<string, string> oPair in copyFields)
                             {
-                                if (oFile.Item.Fields.ContainsField(oPair.Key))
+                                if (oItem.Fields.ContainsField(oPair.Key))
                                 {
-                                    if (oFile.Item[oPair.Key] != null)
+                                    if (oItem[oPair.Key] != null)
                                     {
-                                        oFile.Item[oPair.Value] = oFile.Item[oPair.Key].ToString();
+                                        oItem[oPair.Value] = oItem[oPair.Key].ToString();
                                     }
                                 }
                             }
-                            oFile.Item.SystemUpdate(false);
+                            oItem["Modified By"] = oFile_Info.modifiedBy.ToString();
+                            oItem["Modified"] = oFile_Info.modifiedDate.ToString();
+                            oItem.SystemUpdate(false);
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
                         }
                     }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e);
-                    }
-                }
 
-                //restore the most recent major version of all files in our minor version list, and publish it to create a new major version
-                foreach (SPFile_Info oFile_Info in minorFileInfo)
-                {
-                    try
+                    //restore the original minor version of each file, and check it in to create a new minor version
+                    foreach (SPFile_Info oFile_Info in minorFileInfo)
                     {
-                        SPFile oFile = oWeb.GetFile(oFile_Info.Id);
-                        oFile.CheckOut();
-                        oFile.Versions.RestoreByLabel(oFile_Info.majorVersion + ".0");
-                        oFile.CheckIn("");
-                        oFile.Publish("");
-                        oFile.Update();
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e);
-                    }
-                }
-
-                //migrate the column data on the newly restored major version and use SystemUpdate(false) to prevent any changes to versioning or modified data
-                foreach (SPFile_Info oFile_Info in minorFileInfo)
-                {
-                    try
-                    {
-                        SPListItem oItem = oWeb.GetFile(oFile_Info.Id).Item;
-                        foreach (KeyValuePair<string, string> oPair in copyFields)
+                        try
                         {
-                            if (oItem.Fields.ContainsField(oPair.Key))
+                            SPFile oFile = oWeb.GetFile(oFile_Info.Id);
+                            oFile.CheckOut();
+                            oFile.Versions.RestoreByLabel(oFile_Info.majorVersion + "." + oFile_Info.minorVersion);
+                            oFile.CheckIn("");
+                            oFile.Update();
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
+                        }
+                    }
+
+                    //migrate the column data on the newly restored minor version and use SystemUpdate(false) to prevent any changes to versioning or modified data
+                    foreach (SPFile_Info oFile_Info in minorFileInfo)
+                    {
+                        try
+                        {
+                            SPListItem oItem = oWeb.GetFile(oFile_Info.Id).Item;
+                            foreach (KeyValuePair<string, string> oPair in copyFields)
                             {
-                                if (oItem[oPair.Key] != null)
+                                if (oItem.Fields.ContainsField(oPair.Key))
                                 {
-                                    oItem[oPair.Value] = oItem[oPair.Key].ToString();
+                                    if (oItem[oPair.Key] != null)
+                                    {
+                                        oItem[oPair.Value] = oItem[oPair.Key].ToString();
+                                    }
                                 }
                             }
+                            oItem["Modified By"] = oFile_Info.modifiedBy.ToString();
+                            oItem["Modified"] = oFile_Info.modifiedDate.ToString();
+                            oItem.SystemUpdate(false);
                         }
-                        oItem["Modified By"] = oFile_Info.modifiedBy.ToString();
-                        oItem["Modified"] = oFile_Info.modifiedDate.ToString();
-                        oItem.SystemUpdate(false);
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
+                        }
                     }
-                    catch (Exception e)
+                    //if user selected to remove old columns from list, remove them
+                    if (delete)
                     {
-                        Console.WriteLine(e);
-                    }
-                }
-
-                //restore the original minor version of each file, and check it in to create a new minor version
-                foreach (SPFile_Info oFile_Info in minorFileInfo)
-                {
-                    try
-                    {
-                        SPFile oFile = oWeb.GetFile(oFile_Info.Id);
-                        oFile.CheckOut();
-                        oFile.Versions.RestoreByLabel(oFile_Info.majorVersion + "." + oFile_Info.minorVersion);
-                        oFile.CheckIn("");
-                        oFile.Update();
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e);
-                    }
-                }
-
-                //migrate the column data on the newly restored minor version and use SystemUpdate(false) to prevent any changes to versioning or modified data
-                foreach (SPFile_Info oFile_Info in minorFileInfo)
-                {
-                    try
-                    {
-                        SPListItem oItem = oWeb.GetFile(oFile_Info.Id).Item;
                         foreach (KeyValuePair<string, string> oPair in copyFields)
                         {
-                            if (oItem.Fields.ContainsField(oPair.Key))
+                            if (oList.Fields.ContainsField(oPair.Key))
                             {
-                                if (oItem[oPair.Key] != null)
-                                {
-                                    oItem[oPair.Value] = oItem[oPair.Key].ToString();
-                                }
+                                oList.Fields[oPair.Key].Delete();
                             }
                         }
-                        oItem["Modified By"] = oFile_Info.modifiedBy.ToString();
-                        oItem["Modified"] = oFile_Info.modifiedDate.ToString();
-                        oItem.SystemUpdate(false);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(e);
+                        oList.Update();
                     }
                 }
-                //if user selected to remove old columns from list, remove them
-                if (delete)
+                finally
                 {
-                    foreach (KeyValuePair<string, string> oPair in copyFields)
-                    {
-                        if (oList.Fields.ContainsField(oPair.Key))
-                        {
-                            oList.Fields[oPair.Key].Delete();
-                        }
-                    }
+                    //restore original list property values
+                    oList.EnableModeration = isEnabledModeration;
+                    oList.ForceCheckout = isForcedCheckout;
                     oList.Update();
                 }
+                Console.WriteLine(oWeb.ServerRelativeUrl + " Complete.");
             }
-            finally
+            //if the list does not exist
+            else
             {
-                //restore original list property values
-                oList.EnableModeration = isEnabledModeration;
-                oList.ForceCheckout = isForcedCheckout;
-                oList.Update();
+                Console.WriteLine("List does not exist in this subsite");
             }
-            Console.WriteLine(oWeb.ServerRelativeUrl + " Complete.");
             //call migration method on all child SPWebs using the same arguments passed to this one
             foreach (SPWeb newWeb in oWeb.Webs)
             {
